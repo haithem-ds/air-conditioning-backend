@@ -114,11 +114,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 class ClientSerializer(serializers.ModelSerializer):
     """
-    Serializer for Client model
+    Serializer for Client model. Only name is required for creation;
+    code_client, telephone1, and password are auto-generated if omitted.
     """
     sites_count = serializers.SerializerMethodField()
     equipment_count = serializers.SerializerMethodField()
-    password = serializers.CharField(write_only=True, required=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     token = serializers.CharField(read_only=True)
 
     class Meta:
@@ -130,6 +131,16 @@ class ClientSerializer(serializers.ModelSerializer):
             'password', 'token', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'date_creation', 'token', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'code_client': {'required': False, 'allow_blank': True},
+            'telephone1': {'required': False, 'allow_blank': True},
+            'telephone2': {'required': False, 'allow_blank': True},
+            'email': {'required': False, 'allow_blank': True},
+            'website': {'required': False, 'allow_blank': True},
+            'social_media_link': {'required': False, 'allow_blank': True},
+            'logo': {'required': False},
+            'status_juridique': {'required': False},
+        }
 
     def get_sites_count(self, obj):
         return obj.sites.count()
@@ -138,28 +149,35 @@ class ClientSerializer(serializers.ModelSerializer):
         return obj.client_equipment.count()
     
     def create(self, validated_data):
-        # Extract email and password
-        email = validated_data.pop('email', None)
-        password = validated_data.pop('password')
+        # Extract email and password (password optional, use default if missing)
+        email = validated_data.pop('email', None) or None
+        raw_password = validated_data.pop('password', None)
+        if not raw_password or not str(raw_password).strip():
+            raw_password = 'password123'
         
         # Generate unique code_client if not provided
-        if not validated_data.get('code_client'):
+        if not validated_data.get('code_client') or not str(validated_data.get('code_client', '')).strip():
             import uuid
             validated_data['code_client'] = f"CLIENT_{str(uuid.uuid4())[:8].upper()}"
         
         # Handle empty telephone1 - use default if empty
-        if not validated_data.get('telephone1'):
+        if not validated_data.get('telephone1') or not str(validated_data.get('telephone1', '')).strip():
             validated_data['telephone1'] = '0000000000'
+        
+        # Normalize optional URL/string fields to None if empty
+        for key in ('website', 'social_media_link', 'telephone2'):
+            if key in validated_data and validated_data[key] is not None and str(validated_data[key]).strip() == '':
+                validated_data[key] = None
         
         # Create client directly (no User account needed)
         client = Client.objects.create(
             email=email,
-            password=password,  # Store plain password for now, will be hashed below
+            password=raw_password,  # Stored then hashed below
             **validated_data
         )
         
         # Hash the password
-        client.set_password(password)
+        client.set_password(raw_password)
         client.save()
         
         return client
