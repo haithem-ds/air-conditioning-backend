@@ -19,6 +19,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import json
+from .document_uploads import ALLOWED_FORMATS_USER_MESSAGE, is_allowed_document_upload
 from .models import Client, Site, Technician, TeamGroup, Equipment, ClientEquipment, TechnicianGroup, Contract, ProjectInstallation, ProjectInstallationPDF, ProjectInstallationFacture, ProjectInstallationPV, ProjectInstallationQuote, Traveaux, TraveauxReport, ProjectMaintenance, ProjectMaintenancePDF, ProjectMaintenanceFacture, ProjectMaintenancePV, ProjectMaintenanceQuote, MaintenanceTraveaux, MaintenanceTraveauxReport, DeviceToken
 from .serializers import (
     UserSerializer, UserCreateSerializer, ClientSerializer,
@@ -2111,7 +2112,7 @@ class TraveauxViewSet(viewsets.ModelViewSet):
     )
     def manage_reports(self, request, pk=None):
         """
-        List or upload PDF reports for a specific traveaux
+        List or upload document reports for a specific traveaux
         """
         traveaux = self.get_object()
         
@@ -2125,12 +2126,15 @@ class TraveauxViewSet(viewsets.ModelViewSet):
         
         files = request.FILES.getlist('reports') or request.FILES.getlist('report_files')
         if not files:
-            return Response({'error': 'Please provide at least one PDF report'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Please provide at least one file'}, status=status.HTTP_400_BAD_REQUEST)
         
         created_reports = []
         for upload in files:
-            if upload.content_type not in ('application/pdf', 'application/x-pdf'):
-                return Response({'error': f'{upload.name} is not a PDF file'}, status=status.HTTP_400_BAD_REQUEST)
+            if not is_allowed_document_upload(upload):
+                return Response(
+                    {'error': f'{upload.name}: unsupported type. {ALLOWED_FORMATS_USER_MESSAGE}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             report = TraveauxReport.objects.create(
                 traveaux=traveaux,
                 report_file=upload,
@@ -3312,7 +3316,7 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
     )
     def manage_reports(self, request, pk=None):
         """
-        List or upload PDF reports for a maintenance traveaux
+        List or upload document reports for a maintenance traveaux
         """
         traveaux = self.get_object()
         
@@ -3326,12 +3330,15 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
         
         files = request.FILES.getlist('reports') or request.FILES.getlist('report_files')
         if not files:
-            return Response({'error': 'Please provide at least one PDF report'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Please provide at least one file'}, status=status.HTTP_400_BAD_REQUEST)
         
         created_reports = []
         for upload in files:
-            if upload.content_type not in ('application/pdf', 'application/x-pdf'):
-                return Response({'error': f'{upload.name} is not a PDF file'}, status=status.HTTP_400_BAD_REQUEST)
+            if not is_allowed_document_upload(upload):
+                return Response(
+                    {'error': f'{upload.name}: unsupported type. {ALLOWED_FORMATS_USER_MESSAGE}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             report = MaintenanceTraveauxReport.objects.create(
                 traveaux=traveaux,
                 report_file=upload,

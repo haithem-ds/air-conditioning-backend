@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import FileExtensionValidator
 from django.db import models
 
+from .document_uploads import DOCUMENT_UPLOAD_EXTENSIONS
+
 
 class User(AbstractUser):
     """
@@ -720,7 +722,8 @@ class Contract(models.Model):
         upload_to='contract_pdfs/',
         blank=True,
         null=True,
-        help_text="PDF document for the contract"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Contract attachment: PDF, CSV, Excel, or Word",
     )
     # Maintenance-specific fields
     contract_duration_years = models.PositiveIntegerField(
@@ -916,7 +919,8 @@ class ProjectInstallationPDF(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_installation_pdfs/',
-        help_text="PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Project document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -945,7 +949,8 @@ class ProjectInstallationFacture(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_installation_factures/',
-        help_text="Facture PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Facture document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -974,7 +979,8 @@ class ProjectInstallationPV(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_installation_pvs/',
-        help_text="PV PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="PV document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1003,7 +1009,8 @@ class ProjectInstallationQuote(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_installation_quotes/',
-        help_text="Quote PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Quote document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1126,7 +1133,8 @@ class ProjectMaintenancePDF(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_maintenance_pdfs/',
-        help_text="PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Project document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1155,7 +1163,8 @@ class ProjectMaintenanceFacture(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_maintenance_factures/',
-        help_text="Facture PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Facture document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1184,7 +1193,8 @@ class ProjectMaintenancePV(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_maintenance_pvs/',
-        help_text="PV PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="PV document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1213,7 +1223,8 @@ class ProjectMaintenanceQuote(models.Model):
     )
     pdf_file = models.FileField(
         upload_to='project_maintenance_quotes/',
-        help_text="Quote PDF document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Quote document (PDF, CSV, Excel, or Word)",
     )
     title = models.CharField(
         max_length=255,
@@ -1338,8 +1349,8 @@ class MaintenanceTraveauxReport(models.Model):
     )
     report_file = models.FileField(
         upload_to='maintenance_traveaux_reports/',
-        validators=[FileExtensionValidator(['pdf'])],
-        help_text="PDF report document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Report attachment (PDF, CSV, Excel, or Word)",
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
     
@@ -1504,8 +1515,8 @@ class TraveauxReport(models.Model):
     )
     report_file = models.FileField(
         upload_to='traveaux_reports/',
-        validators=[FileExtensionValidator(['pdf'])],
-        help_text="PDF report document"
+        validators=[FileExtensionValidator(list(DOCUMENT_UPLOAD_EXTENSIONS))],
+        help_text="Report attachment (PDF, CSV, Excel, or Word)",
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
     
