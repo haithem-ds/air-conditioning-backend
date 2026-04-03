@@ -324,13 +324,16 @@ class SiteViewSet(viewsets.ModelViewSet):
     queryset = Site.objects.all()
     serializer_class = SiteSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+    # Match admin UIs that expect the full site list (or full list per ?client= filter);
+    # default PAGE_SIZE hid sites past the first page in dropdowns (e.g. client equipment).
+    pagination_class = None
+
     def get_queryset(self):
         """
         Filter sites based on user role and client access
         """
         user = self.request.user
-        queryset = Site.objects.all()
+        queryset = Site.objects.all().order_by('title', 'id')
         
         # Apply client filter if provided
         client_id_param = self.request.query_params.get('client')
