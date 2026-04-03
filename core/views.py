@@ -274,13 +274,16 @@ class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+    # Admin UI loads the full list in one request; default PAGE_SIZE pagination hid
+    # newly created clients (highest id) off page 1, so they vanished after refresh.
+    pagination_class = None
+
     def get_queryset(self):
         """
         Filter clients based on user role and search query
         """
         user = self.request.user
-        queryset = Client.objects.all()
+        queryset = Client.objects.all().order_by('-created_at', '-id')
         
         # Apply search filter if search parameter is provided
         search_query = self.request.query_params.get('search', None)
