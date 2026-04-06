@@ -1959,8 +1959,19 @@ class TraveauxViewSet(viewsets.ModelViewSet):
         if user.role == 'ADMIN':
             return queryset
         elif user.role == 'CLIENT':
-            # Clients can see traveaux for their projects
-            return queryset.filter(project__client__user=user)
+            # Match ContractViewSet: prefer Client.user FK, else client_<id> username (email login)
+            try:
+                client = Client.objects.get(user=user)
+                return queryset.filter(project__client=client)
+            except Client.DoesNotExist:
+                username = getattr(user, "username", "") or ""
+                if username.startswith("client_"):
+                    try:
+                        client_id = int(username.replace("client_", ""))
+                        return queryset.filter(project__client_id=client_id)
+                    except ValueError:
+                        return Traveaux.objects.none()
+                return Traveaux.objects.none()
         elif user.role == 'TECHNICIAN':
             # Technicians can see all traveaux (for service purposes)
             return queryset
@@ -3167,20 +3178,24 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
             print(f"DEBUG MaintenanceTraveaux: ADMIN user, returning {result.count()} traveaux")
             return result
         elif user.role == 'CLIENT':
-            # Extract client ID from username (format: client_<id>)
-            if user.username.startswith('client_'):
-                try:
-                    client_id = int(user.username.replace('client_', ''))
-                    result = queryset.filter(project__client_id=client_id)
-                    print(f"DEBUG MaintenanceTraveaux: CLIENT user (client_id={client_id}), returning {result.count()} traveaux")
-                    return result
-                except ValueError:
-                    print(f"DEBUG MaintenanceTraveaux: CLIENT user - Error parsing client_id from username '{user.username}'")
-                    return MaintenanceTraveaux.objects.none()
-            # Fallback: try to filter by client__user if username doesn't match pattern
-            result = queryset.filter(project__client__user=user)
-            print(f"DEBUG MaintenanceTraveaux: CLIENT user (fallback), returning {result.count()} traveaux")
-            return result
+            # Same rules as ContractViewSet / installation traveaux (FK first, then client_<id>)
+            try:
+                client = Client.objects.get(user=user)
+                result = queryset.filter(project__client=client)
+                print(f"DEBUG MaintenanceTraveaux: CLIENT via Client.user, returning {result.count()} traveaux")
+                return result
+            except Client.DoesNotExist:
+                username = getattr(user, "username", "") or ""
+                if username.startswith("client_"):
+                    try:
+                        client_id = int(username.replace("client_", ""))
+                        result = queryset.filter(project__client_id=client_id)
+                        print(f"DEBUG MaintenanceTraveaux: CLIENT user (client_id={client_id}), returning {result.count()} traveaux")
+                        return result
+                    except ValueError:
+                        print(f"DEBUG MaintenanceTraveaux: CLIENT user - Error parsing client_id from username '{username}'")
+                        return MaintenanceTraveaux.objects.none()
+                return MaintenanceTraveaux.objects.none()
         elif user.role == 'TECHNICIAN':
             result = queryset.filter(project__technician_group__technicians__user=user)
             print(f"DEBUG MaintenanceTraveaux: TECHNICIAN user, returning {result.count()} traveaux")
