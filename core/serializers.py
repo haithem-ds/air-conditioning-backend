@@ -127,6 +127,7 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'code_client', 'email', 'telephone1', 'telephone2',
             'website', 'logo', 'social_media_link', 'status_juridique',
+            'nif', 'nis', 'rc',
             'date_creation', 'sites_count', 'equipment_count',
             'password', 'token', 'created_at', 'updated_at'
         ]
@@ -140,6 +141,9 @@ class ClientSerializer(serializers.ModelSerializer):
             'social_media_link': {'required': False, 'allow_blank': True},
             'logo': {'required': False},
             'status_juridique': {'required': False},
+            'nif': {'required': False, 'allow_blank': True},
+            'nis': {'required': False, 'allow_blank': True},
+            'rc': {'required': False, 'allow_blank': True},
         }
 
     def get_sites_count(self, obj):
@@ -169,6 +173,10 @@ class ClientSerializer(serializers.ModelSerializer):
             if key in validated_data and validated_data[key] is not None and str(validated_data[key]).strip() == '':
                 validated_data[key] = None
         
+        for key in ('nif', 'nis', 'rc'):
+            if key in validated_data and validated_data[key] is not None:
+                validated_data[key] = str(validated_data[key]).strip()
+        
         # Create client directly (no User account needed)
         client = Client.objects.create(
             email=email,
@@ -186,6 +194,10 @@ class ClientSerializer(serializers.ModelSerializer):
         # Handle password update if provided
         password = validated_data.pop('password', None)
         email = validated_data.pop('email', None)
+        
+        for key in ('nif', 'nis', 'rc'):
+            if key in validated_data and validated_data[key] is not None:
+                validated_data[key] = str(validated_data[key]).strip()
         
         # Update client fields
         for attr, value in validated_data.items():
@@ -214,7 +226,7 @@ class SiteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'client', 'client_name', 'address',
             'city', 'wilaya', 'postal_code', 'country', 'sector',
-            'nif', 'nis', 'rc', 'region', 'number_of_workers',
+            'region', 'number_of_workers',
             'latitude', 'longitude', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

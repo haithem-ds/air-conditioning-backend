@@ -44,7 +44,7 @@ class Client(models.Model):
     """
     STATUS_JURIDIQUE_CHOICES = [
         ('SNC', 'SNC (Société en Nom Collectif)'),
-        ('SAEL', 'SAEL (Société par Actions à Responsabilité Limitée)'),
+        ('SARL', 'SARL (Société à Responsabilité Limitée)'),
         ('EURL', 'EURL (Entreprise Unipersonnelle à Responsabilité Limitée)'),
         ('SA', 'SA (Société Anonyme)'),
         ('SPA', 'SPA (Société par Actions)'),
@@ -85,6 +85,24 @@ class Client(models.Model):
         blank=True,
         null=True,
         help_text="Link to client's social media page(s)"
+    )
+    nif = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Fiscal identification number (optional)"
+    )
+    nis = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Statistical identification number (optional)"
+    )
+    rc = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        help_text="Commercial register number (optional)"
     )
     status_juridique = models.CharField(
         max_length=10,
@@ -229,21 +247,6 @@ class Site(models.Model):
         blank=True,
         null=True,
         help_text="Latitude coordinate"
-    )
-    nif = models.CharField(
-        max_length=50,
-        default='NIF000000000',
-        help_text="Fiscal identification number"
-    )
-    nis = models.CharField(
-        max_length=50,
-        default='NIS000000000',
-        help_text="Statyistical identification number"
-    )
-    rc = models.CharField(
-        max_length=50,
-        default='RC000000000',
-        help_text="Commercial register number"
     )
     number_of_workers = models.CharField(
         max_length=10,

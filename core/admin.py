@@ -48,6 +48,9 @@ class ClientAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('name', 'code_client', 'status_juridique')
         }),
+        ('Tax & registration (optional)', {
+            'fields': ('nif', 'nis', 'rc'),
+        }),
         ('Login Credentials', {
             'fields': ('email', 'password', 'token'),
             'description': 'Email and password for client login. Token is auto-generated.'
@@ -88,9 +91,6 @@ class SiteAdmin(admin.ModelAdmin):
         ('Coordinates', {
             'fields': ('longitude', 'latitude'),
             'classes': ('collapse',)
-        }),
-        ('Legal Information', {
-            'fields': ('nif', 'nis', 'rc')
         }),
         ('Workforce', {
             'fields': ('number_of_workers',)
