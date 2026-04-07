@@ -600,7 +600,8 @@ class ClientEquipmentViewSet(viewsets.ModelViewSet):
     queryset = ClientEquipment.objects.all()
     serializer_class = ClientEquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+    pagination_class = None
+
     def get_queryset(self):
         """
         Filter client equipment based on user role and permissions
@@ -887,7 +888,8 @@ class ContractViewSet(viewsets.ModelViewSet):
     """
     queryset = Contract.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-    
+    pagination_class = None
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ContractListSerializer
