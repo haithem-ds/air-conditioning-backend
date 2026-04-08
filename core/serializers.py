@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from .models import Client, Site, Technician, TeamGroup, Equipment, ClientEquipment, TechnicianGroup, Contract, ProjectInstallation, ProjectInstallationPDF, ProjectInstallationFacture, ProjectInstallationPV, ProjectInstallationQuote, Traveaux, TraveauxReport, ProjectMaintenance, ProjectMaintenancePDF, ProjectMaintenanceFacture, ProjectMaintenancePV, ProjectMaintenanceQuote, MaintenanceTraveaux, MaintenanceTraveauxReport, DeviceToken
 
 User = get_user_model()
@@ -219,7 +220,7 @@ class SiteSerializer(serializers.ModelSerializer):
     """
     Serializer for Site model
     """
-    client_name = serializers.CharField(source='client.name', read_only=True)
+    client_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Site
@@ -230,6 +231,12 @@ class SiteSerializer(serializers.ModelSerializer):
             'latitude', 'longitude', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_client_name(self, obj):
+        try:
+            return obj.client.name
+        except ObjectDoesNotExist:
+            return None
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
@@ -259,11 +266,11 @@ class ClientEquipmentSerializer(serializers.ModelSerializer):
     """
     Serializer for ClientEquipment model
     """
-    equipment_name = serializers.CharField(source='equipment.full_name', read_only=True)
-    equipment_brand = serializers.CharField(source='equipment.brand', read_only=True)
-    equipment_model = serializers.CharField(source='equipment.model_number', read_only=True)
-    site_title = serializers.CharField(source='site.title', read_only=True)
-    client_name = serializers.CharField(source='client.name', read_only=True)
+    equipment_name = serializers.SerializerMethodField()
+    equipment_brand = serializers.SerializerMethodField()
+    equipment_model = serializers.SerializerMethodField()
+    site_title = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
     
     # For reading: nested objects
     equipment = serializers.SerializerMethodField()
@@ -292,25 +299,64 @@ class ClientEquipmentSerializer(serializers.ModelSerializer):
             'year_of_facturation', 'installation_date', 'warranty_expiry', 'notes', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_equipment_name(self, obj):
+        try:
+            return obj.equipment.full_name
+        except ObjectDoesNotExist:
+            return None
+
+    def get_equipment_brand(self, obj):
+        try:
+            return obj.equipment.brand
+        except ObjectDoesNotExist:
+            return None
+
+    def get_equipment_model(self, obj):
+        try:
+            return obj.equipment.model_number
+        except ObjectDoesNotExist:
+            return None
+
+    def get_site_title(self, obj):
+        try:
+            site = obj.site
+        except ObjectDoesNotExist:
+            return None
+        return site.title if site is not None else None
+
+    def get_client_name(self, obj):
+        try:
+            return obj.client.name
+        except ObjectDoesNotExist:
+            return None
     
     def get_equipment(self, obj):
         """Return nested equipment object"""
-        if obj.equipment:
-            return {
-                'id': obj.equipment.id,
-                'brand': obj.equipment.brand,
-                'full_name': obj.equipment.full_name,
-            }
-        return None
+        try:
+            eq = obj.equipment
+        except ObjectDoesNotExist:
+            return None
+        if eq is None:
+            return None
+        return {
+            'id': eq.id,
+            'brand': eq.brand,
+            'full_name': eq.full_name,
+        }
     
     def get_site(self, obj):
         """Return nested site object if it exists"""
-        if obj.site:
-            return {
-                'id': obj.site.id,
-                'title': obj.site.title
-            }
-        return None
+        try:
+            site = obj.site
+        except ObjectDoesNotExist:
+            return None
+        if site is None:
+            return None
+        return {
+            'id': site.id,
+            'title': site.title
+        }
 
 
 class TechnicianSerializer(serializers.ModelSerializer):

@@ -761,10 +761,14 @@ class Contract(models.Model):
     
     def is_expired(self):
         from django.utils import timezone
+        if self.ending_date is None:
+            return False
         return timezone.now().date() > self.ending_date
     
     def days_until_expiry(self):
         from django.utils import timezone
+        if self.ending_date is None:
+            return None
         delta = self.ending_date - timezone.now().date()
         return delta.days
     
