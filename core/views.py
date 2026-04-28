@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import AccessToken
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from datetime import datetime, timedelta
@@ -509,40 +510,26 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         response = super().post(request, *args, **kwargs)
         
         if response.status_code == 200:
-            # Try to get user by username first, then by email if that fails
+            # Resolve user from issued access token to avoid ambiguous username/email lookups.
             try:
-                user = User.objects.get(username=request.data['username'])
-            except User.DoesNotExist:
-                # If username not found, try to find by email (for client login)
-                try:
-                    user = User.objects.get(email=request.data['username'])
-                except User.DoesNotExist:
-                    # If still not found, try to find client user
-                    from .models import Client, Technician
-                    try:
-                        client = Client.objects.get(email=request.data['username'])
-                        user = User.objects.get(username=f"client_{client.id}")
-                    except (Client.DoesNotExist, User.DoesNotExist):
-                        # Try to find technician user
-                        try:
-                            technician = Technician.objects.get(
-                                Q(email=request.data['username']) | 
-                                Q(identification_number=request.data['username'])
-                            )
-                            if technician.user:
-                                user = technician.user
-                            else:
-                                return response  # Return response without user data
-                        except (Technician.DoesNotExist, User.DoesNotExist):
-                            return response  # Return response without user data
-            
-            response.data['user'] = {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'role': user.role,
-                'full_name': user.get_full_name()
-            }
+                access_token = response.data.get('access')
+                if not access_token:
+                    return response
+                token = AccessToken(access_token)
+                user_id = token.get('user_id')
+                if not user_id:
+                    return response
+                user = User.objects.get(id=user_id)
+                response.data['user'] = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'full_name': user.get_full_name()
+                }
+            except Exception:
+                # Keep token response valid even if user metadata cannot be attached.
+                return response
         
         return response
 
