@@ -364,8 +364,15 @@ class SiteViewSet(viewsets.ModelViewSet):
             # If client_id was provided in query params, it's already filtered above
             return queryset
         elif user.role == 'TECHNICIAN':
-            # Technicians can view all sites (for service assignments)
-            return queryset
+            # Technicians should only see sites linked to projects assigned to their groups.
+            return queryset.filter(
+                Q(contracts__installation_projects__technician_group__technicians__user=user) |
+                Q(contracts__maintenance_projects__technician_group__technicians__user=user) |
+                Q(installation_projects__technician_group__technicians__user=user) |
+                Q(maintenance_projects__technician_group__technicians__user=user) |
+                Q(traveaux__project__technician_group__technicians__user=user) |
+                Q(maintenance_traveaux__project__technician_group__technicians__user=user)
+            ).distinct()
         else:
             return Site.objects.none()
     
@@ -1962,8 +1969,10 @@ class TraveauxViewSet(viewsets.ModelViewSet):
                         return Traveaux.objects.none()
                 return Traveaux.objects.none()
         elif user.role == 'TECHNICIAN':
-            # Technicians can see all traveaux (for service purposes)
-            return queryset
+            # Technicians should only see traveaux tied to projects assigned to their groups.
+            return queryset.filter(
+                project__technician_group__technicians__user=user
+            ).distinct()
         else:
             return Traveaux.objects.none()
     
