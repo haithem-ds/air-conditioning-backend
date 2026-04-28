@@ -401,7 +401,9 @@ class Technician(models.Model):
                 user.set_password(self.password if self.password else '123')
                 user.save()
             self.user = user
-            super().save(*args, **kwargs)  # Save again to link user
+            # Do not reuse create kwargs (e.g. force_insert=True) on this second save.
+            # Reusing them can trigger a duplicate INSERT and raise IntegrityError.
+            super().save(update_fields=['user', 'updated_at'])
         else:
             # Update existing user
             self.user.email = self.email or self.user.email
