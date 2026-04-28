@@ -5,6 +5,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import AccessToken
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from datetime import datetime, timedelta
@@ -12,10 +13,12 @@ from collections import defaultdict
 from calendar import monthrange
 from django.http import HttpResponse
 from io import BytesIO
+from pathlib import Path
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -37,6 +40,58 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+def _draw_fca_logo_header(pdf_canvas, width, height):
+    """
+    Draw FCA logo image on both header corners.
+    Falls back to text when the image file cannot be resolved.
+    """
+    logo_candidates = [
+        Path(settings.BASE_DIR) / "assets" / "FCA_Logo.png",
+        Path(settings.BASE_DIR).parent.parent / "1" / "assets" / "FCA_Logo.png",
+    ]
+
+    logo_path = next((candidate for candidate in logo_candidates if candidate.exists()), None)
+
+    if logo_path:
+        logo_image = ImageReader(str(logo_path))
+        logo_width = 3.8 * cm
+        logo_height = 1.9 * cm
+        logo_y = height - 75
+        pdf_canvas.drawImage(
+            logo_image,
+            45,
+            logo_y,
+            width=logo_width,
+            height=logo_height,
+            preserveAspectRatio=True,
+            mask='auto',
+        )
+        pdf_canvas.drawImage(
+            logo_image,
+            width - 45 - logo_width,
+            logo_y,
+            width=logo_width,
+            height=logo_height,
+            preserveAspectRatio=True,
+            mask='auto',
+        )
+        return
+
+    red_color = colors.HexColor('#FF0000')
+    black_color = colors.HexColor('#000000')
+    pdf_canvas.setFillColor(red_color)
+    pdf_canvas.setFont("Helvetica-Bold", 20)
+    pdf_canvas.drawString(50, height - 50, "FCA")
+    pdf_canvas.setFillColor(black_color)
+    pdf_canvas.setFont("Helvetica", 10)
+    pdf_canvas.drawString(50, height - 70, "Les spécialistes")
+    pdf_canvas.setFillColor(red_color)
+    pdf_canvas.setFont("Helvetica-Bold", 20)
+    pdf_canvas.drawRightString(width - 50, height - 50, "FCA")
+    pdf_canvas.setFillColor(black_color)
+    pdf_canvas.setFont("Helvetica", 10)
+    pdf_canvas.drawRightString(width - 50, height - 70, "Les spécialistes")
 
 
 def create_maintenance_projects_automatically(contract):
@@ -2191,29 +2246,13 @@ class TraveauxViewSet(viewsets.ModelViewSet):
             p = canvas.Canvas(buffer, pagesize=A4)
             width, height = A4
             
-            # Colors
-            red_color = colors.HexColor('#FF0000')
-            black_color = colors.HexColor('#000000')
-            
-            # Header with logo (simplified - you can add actual logo image)
-            p.setFillColor(red_color)
-            p.setFont("Helvetica-Bold", 20)
-            p.drawString(50, height - 50, "FCA")
-            p.setFillColor(black_color)
-            p.setFont("Helvetica", 10)
-            p.drawString(50, height - 70, "Les spécialistes")
-            
+            # Header with FCA logo image
+            _draw_fca_logo_header(p, width, height)
+
             # Title
+            p.setFillColor(colors.black)
             p.setFont("Helvetica-Bold", 16)
             p.drawCentredString(width / 2, height - 50, "rapport intervention")
-            
-            # Right logo
-            p.setFillColor(red_color)
-            p.setFont("Helvetica-Bold", 20)
-            p.drawRightString(width - 50, height - 50, "FCA")
-            p.setFillColor(black_color)
-            p.setFont("Helvetica", 10)
-            p.drawRightString(width - 50, height - 70, "Les spécialistes")
             
             y_position = height - 120
             
@@ -3395,29 +3434,13 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
             p = canvas.Canvas(buffer, pagesize=A4)
             width, height = A4
             
-            # Colors
-            red_color = colors.HexColor('#FF0000')
-            black_color = colors.HexColor('#000000')
-            
-            # Header with logo (simplified - you can add actual logo image)
-            p.setFillColor(red_color)
-            p.setFont("Helvetica-Bold", 20)
-            p.drawString(50, height - 50, "FCA")
-            p.setFillColor(black_color)
-            p.setFont("Helvetica", 10)
-            p.drawString(50, height - 70, "Les spécialistes")
-            
+            # Header with FCA logo image
+            _draw_fca_logo_header(p, width, height)
+
             # Title
+            p.setFillColor(colors.black)
             p.setFont("Helvetica-Bold", 16)
             p.drawCentredString(width / 2, height - 50, "rapport intervention")
-            
-            # Right logo
-            p.setFillColor(red_color)
-            p.setFont("Helvetica-Bold", 20)
-            p.drawRightString(width - 50, height - 50, "FCA")
-            p.setFillColor(black_color)
-            p.setFont("Helvetica", 10)
-            p.drawRightString(width - 50, height - 70, "Les spécialistes")
             
             y_position = height - 120
             
