@@ -810,6 +810,7 @@ class TraveauxSerializer(serializers.ModelSerializer):
         model = Traveaux
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
+            'parent_traveaux', 'is_secondary',
             'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
             'sites', 'sites_data', 'sites_count', 'scheduled_dates', 'progress_percentage',
             'is_completed', 'reports', 'created_at', 'updated_at'
@@ -854,6 +855,22 @@ class TraveauxSerializer(serializers.ModelSerializer):
         
         return super().to_internal_value(data)
 
+    def validate(self, attrs):
+        parent = attrs.get('parent_traveaux')
+        if parent is not None and attrs.get('project') and parent.project_id != attrs['project'].id:
+            raise serializers.ValidationError({'parent_traveaux': 'Parent task must belong to the same project.'})
+        return attrs
+
+    def create(self, validated_data):
+        if validated_data.get('parent_traveaux') is not None:
+            validated_data['is_secondary'] = True
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'parent_traveaux' in validated_data:
+            validated_data['is_secondary'] = validated_data.get('parent_traveaux') is not None
+        return super().update(instance, validated_data)
+
 
 class TraveauxListSerializer(serializers.ModelSerializer):
     """
@@ -871,6 +888,7 @@ class TraveauxListSerializer(serializers.ModelSerializer):
         model = Traveaux
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
+            'parent_traveaux', 'is_secondary',
             'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
             'sites_count', 'scheduled_dates', 'progress_percentage', 'is_completed', 'reports',
             'created_at', 'updated_at'
@@ -1110,6 +1128,7 @@ class MaintenanceTraveauxSerializer(serializers.ModelSerializer):
         model = MaintenanceTraveaux
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
+            'parent_traveaux', 'is_secondary',
             'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
             'sites', 'sites_data', 'sites_count', 'scheduled_dates', 'progress_percentage',
             'is_completed', 'reports', 'created_at', 'updated_at'
@@ -1160,6 +1179,22 @@ class MaintenanceTraveauxSerializer(serializers.ModelSerializer):
         
         return super().to_internal_value(data)
 
+    def validate(self, attrs):
+        parent = attrs.get('parent_traveaux')
+        if parent is not None and attrs.get('project') and parent.project_id != attrs['project'].id:
+            raise serializers.ValidationError({'parent_traveaux': 'Parent task must belong to the same project.'})
+        return attrs
+
+    def create(self, validated_data):
+        if validated_data.get('parent_traveaux') is not None:
+            validated_data['is_secondary'] = True
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'parent_traveaux' in validated_data:
+            validated_data['is_secondary'] = validated_data.get('parent_traveaux') is not None
+        return super().update(instance, validated_data)
+
 
 class MaintenanceTraveauxListSerializer(serializers.ModelSerializer):
     """
@@ -1177,6 +1212,7 @@ class MaintenanceTraveauxListSerializer(serializers.ModelSerializer):
         model = MaintenanceTraveaux
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
+            'parent_traveaux', 'is_secondary',
             'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
             'sites_count', 'scheduled_dates', 'progress_percentage', 'is_completed', 'reports',
             'created_at', 'updated_at'

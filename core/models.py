@@ -1264,6 +1264,18 @@ class MaintenanceTraveaux(models.Model):
         related_name='maintenance_traveaux',
         help_text="Project this traveaux belongs to"
     )
+    parent_traveaux = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        related_name='secondary_traveaux',
+        blank=True,
+        null=True,
+        help_text="Parent traveaux when this is a secondary task"
+    )
+    is_secondary = models.BooleanField(
+        default=False,
+        help_text="Whether this traveaux is a secondary task"
+    )
     title = models.CharField(
         max_length=255,
         help_text="Title of the traveaux"
@@ -1429,6 +1441,18 @@ class Traveaux(models.Model):
         on_delete=models.CASCADE,
         related_name='traveaux',
         help_text="Project this traveaux belongs to"
+    )
+    parent_traveaux = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        related_name='secondary_traveaux',
+        blank=True,
+        null=True,
+        help_text="Parent traveaux when this is a secondary task"
+    )
+    is_secondary = models.BooleanField(
+        default=False,
+        help_text="Whether this traveaux is a secondary task"
     )
     title = models.CharField(
         max_length=255,
