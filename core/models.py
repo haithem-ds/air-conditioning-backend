@@ -1350,7 +1350,7 @@ class MaintenanceTraveaux(models.Model):
     class Meta:
         verbose_name = "Maintenance Traveaux"
         verbose_name_plural = "Maintenance Traveaux"
-        ordering = ['-created_at']
+        ordering = ['created_at']
 
 
 class MaintenanceTraveauxReport(models.Model):
@@ -1528,7 +1528,7 @@ class Traveaux(models.Model):
     class Meta:
         verbose_name = "Traveaux"
         verbose_name_plural = "Traveaux"
-        ordering = ['-created_at']
+        ordering = ['created_at']
 
 
 class TraveauxReport(models.Model):
