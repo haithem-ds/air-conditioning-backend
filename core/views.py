@@ -2440,28 +2440,28 @@ class TraveauxViewSet(viewsets.ModelViewSet):
         """
         try:
             traveaux = self.get_object()
-            quantity_completed = request.data.get('quantity_completed')
-            
-            if quantity_completed is None:
+            raw_quantity = request.data.get('quantity_completed')
+
+            if raw_quantity is None:
                 return Response({'error': 'quantity_completed is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+            try:
+                quantity_completed = int(raw_quantity)
+            except (TypeError, ValueError):
+                return Response({'error': 'quantity_completed must be a number'}, status=status.HTTP_400_BAD_REQUEST)
+
             if quantity_completed < 0 or quantity_completed > traveaux.quantity:
                 return Response({
                     'error': f'quantity_completed must be between 0 and {traveaux.quantity}'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Update the quantity completed
+
             traveaux.quantity_completed = quantity_completed
-            
-            # Automatically update status based on progress
             traveaux.update_status()
-            
+            traveaux.refresh_from_db()
+
             serializer = self.get_serializer(traveaux)
-            return Response({
-                'message': 'Progress updated successfully',
-                'traveaux': serializer.data
-            })
-            
+            return Response(serializer.data)
+
         except Traveaux.DoesNotExist:
             return Response({'error': 'Traveaux not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -3348,17 +3348,27 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
         Update the progress of a traveaux
         """
         traveaux = self.get_object()
-        quantity_completed = request.data.get('quantity_completed')
-        
-        if quantity_completed is not None:
-            traveaux.quantity_completed = quantity_completed
-            traveaux.update_status()  # This will automatically update the status
-            traveaux.save()
-            
-            serializer = self.get_serializer(traveaux)
-            return Response(serializer.data)
-        
-        return Response({'error': 'quantity_completed is required'}, status=status.HTTP_400_BAD_REQUEST)
+        raw_quantity = request.data.get('quantity_completed')
+
+        if raw_quantity is None:
+            return Response({'error': 'quantity_completed is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            quantity_completed = int(raw_quantity)
+        except (TypeError, ValueError):
+            return Response({'error': 'quantity_completed must be a number'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if quantity_completed < 0 or quantity_completed > traveaux.quantity:
+            return Response({
+                'error': f'quantity_completed must be between 0 and {traveaux.quantity}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        traveaux.quantity_completed = quantity_completed
+        traveaux.update_status()
+        traveaux.refresh_from_db()
+
+        serializer = self.get_serializer(traveaux)
+        return Response(serializer.data)
     
     @action(
         detail=True,
