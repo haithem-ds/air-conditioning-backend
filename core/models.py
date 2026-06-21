@@ -1295,7 +1295,7 @@ class MaintenanceTraveaux(models.Model):
     )
     progress_percent = models.PositiveSmallIntegerField(
         default=0,
-        help_text="Work progress as percentage (0-100, stored in 10% steps)"
+        help_text="Work progress as percentage (0-100, stored in 1% steps)"
     )
     status = models.CharField(
         max_length=10,
@@ -1473,7 +1473,7 @@ class Traveaux(models.Model):
     )
     progress_percent = models.PositiveSmallIntegerField(
         default=0,
-        help_text="Work progress as percentage (0-100, stored in 10% steps)"
+        help_text="Work progress as percentage (0-100, stored in 1% steps)"
     )
     status = models.CharField(
         max_length=10,

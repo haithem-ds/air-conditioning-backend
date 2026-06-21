@@ -1,10 +1,10 @@
-"""Shared helpers for task progress (0–100%, 10% steps)."""
+"""Shared helpers for task progress (0–100%, 1% steps)."""
 
-PROGRESS_STEP = 10
+PROGRESS_STEP = 1
 
 
 def normalize_progress_percent(value) -> int:
-    """Clamp to 0–100 and snap to 10% increments."""
+    """Clamp to 0–100 and snap to 1% increments."""
     try:
         percent = int(float(value))
     except (TypeError, ValueError):

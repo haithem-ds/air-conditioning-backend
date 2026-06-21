@@ -2468,7 +2468,7 @@ class TraveauxViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def update_progress(self, request, pk=None):
         """
-        Update task progress via progress_percentage (0-100, 10% steps) or quantity_completed.
+        Update task progress via progress_percentage (0-100, 1% steps) or quantity_completed.
         """
         try:
             from .progress_utils import apply_progress_update
@@ -3387,7 +3387,7 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def update_progress(self, request, pk=None):
         """
-        Update task progress via progress_percentage (0-100, 10% steps) or quantity_completed.
+        Update task progress via progress_percentage (0-100, 1% steps) or quantity_completed.
         """
         try:
             from .progress_utils import apply_progress_update
