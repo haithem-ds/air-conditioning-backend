@@ -1293,6 +1293,10 @@ class MaintenanceTraveaux(models.Model):
         default=0,
         help_text="Quantity that has been completed"
     )
+    progress_percent = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Work progress as percentage (0-100, stored in 10% steps)"
+    )
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
@@ -1321,27 +1325,23 @@ class MaintenanceTraveaux(models.Model):
     
     @property
     def progress_percentage(self):
-        """
-        Calculate work progress percentage based on completed quantity
-        """
-        if self.quantity == 0:
-            return 0
-        return round((self.quantity_completed / self.quantity) * 100, 2)
+        """Progress percentage (0-100), stored independently of unit quantity."""
+        return float(self.progress_percent)
     
     @property
     def is_completed(self):
         """
         Check if the traveaux is fully completed
         """
-        return self.quantity_completed >= self.quantity
+        return self.progress_percent >= 100 or self.quantity_completed >= self.quantity
     
     def update_status(self):
         """
         Automatically update status based on progress
         """
-        if self.quantity_completed >= self.quantity:
+        if self.progress_percent >= 100 or self.quantity_completed >= self.quantity:
             self.status = 'FINISHED'
-        elif self.quantity_completed > 0:
+        elif self.progress_percent > 0 or self.quantity_completed > 0:
             self.status = 'ONGOING'
         else:
             self.status = 'CREATED'
@@ -1471,6 +1471,10 @@ class Traveaux(models.Model):
         default=0,
         help_text="Quantity that has been completed"
     )
+    progress_percent = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Work progress as percentage (0-100, stored in 10% steps)"
+    )
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
@@ -1499,27 +1503,23 @@ class Traveaux(models.Model):
     
     @property
     def progress_percentage(self):
-        """
-        Calculate work progress percentage based on completed quantity
-        """
-        if self.quantity == 0:
-            return 0
-        return round((self.quantity_completed / self.quantity) * 100, 2)
+        """Progress percentage (0-100), stored independently of unit quantity."""
+        return float(self.progress_percent)
     
     @property
     def is_completed(self):
         """
         Check if the traveaux is fully completed
         """
-        return self.quantity_completed >= self.quantity
+        return self.progress_percent >= 100 or self.quantity_completed >= self.quantity
     
     def update_status(self):
         """
         Automatically update status based on progress
         """
-        if self.quantity_completed >= self.quantity:
+        if self.progress_percent >= 100 or self.quantity_completed >= self.quantity:
             self.status = 'FINISHED'
-        elif self.quantity_completed > 0:
+        elif self.progress_percent > 0 or self.quantity_completed > 0:
             self.status = 'ONGOING'
         else:
             self.status = 'CREATED'

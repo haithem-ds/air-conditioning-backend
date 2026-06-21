@@ -821,7 +821,7 @@ class TraveauxSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
             'parent_traveaux', 'is_secondary',
-            'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
+            'quantity', 'quantity_completed', 'progress_percent', 'status', 'status_display', 'estimated_time',
             'sites', 'sites_data', 'sites_count', 'scheduled_dates', 'progress_percentage',
             'is_completed', 'reports', 'created_at', 'updated_at'
         ]
@@ -899,7 +899,7 @@ class TraveauxListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
             'parent_traveaux', 'is_secondary',
-            'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
+            'quantity', 'quantity_completed', 'progress_percent', 'status', 'status_display', 'estimated_time',
             'sites_count', 'scheduled_dates', 'progress_percentage', 'is_completed', 'reports',
             'created_at', 'updated_at'
         ]
@@ -1139,7 +1139,7 @@ class MaintenanceTraveauxSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
             'parent_traveaux', 'is_secondary',
-            'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
+            'quantity', 'quantity_completed', 'progress_percent', 'status', 'status_display', 'estimated_time',
             'sites', 'sites_data', 'sites_count', 'scheduled_dates', 'progress_percentage',
             'is_completed', 'reports', 'created_at', 'updated_at'
         ]
@@ -1223,7 +1223,7 @@ class MaintenanceTraveauxListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project', 'project_code', 'project_name', 'title', 'description',
             'parent_traveaux', 'is_secondary',
-            'quantity', 'quantity_completed', 'status', 'status_display', 'estimated_time',
+            'quantity', 'quantity_completed', 'progress_percent', 'status', 'status_display', 'estimated_time',
             'sites_count', 'scheduled_dates', 'progress_percentage', 'is_completed', 'reports',
             'created_at', 'updated_at'
         ]

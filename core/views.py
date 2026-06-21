@@ -2468,27 +2468,22 @@ class TraveauxViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def update_progress(self, request, pk=None):
         """
-        Update the progress of a traveaux by updating quantity_completed
+        Update task progress via progress_percentage (0-100, 10% steps) or quantity_completed.
         """
         try:
+            from .progress_utils import apply_progress_update
+
             traveaux = self.get_object()
-            raw_quantity = request.data.get('quantity_completed')
+            progress_percentage = request.data.get('progress_percentage')
+            if progress_percentage is None:
+                progress_percentage = request.data.get('progress_percent')
+            quantity_completed = request.data.get('quantity_completed')
 
-            if raw_quantity is None:
-                return Response({'error': 'quantity_completed is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-            try:
-                quantity_completed = int(raw_quantity)
-            except (TypeError, ValueError):
-                return Response({'error': 'quantity_completed must be a number'}, status=status.HTTP_400_BAD_REQUEST)
-
-            if quantity_completed < 0 or quantity_completed > traveaux.quantity:
-                return Response({
-                    'error': f'quantity_completed must be between 0 and {traveaux.quantity}'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            traveaux.quantity_completed = quantity_completed
-            traveaux.update_status()
+            apply_progress_update(
+                traveaux,
+                progress_percentage=progress_percentage,
+                quantity_completed=quantity_completed if progress_percentage is None else None,
+            )
             traveaux.refresh_from_db()
 
             try:
@@ -2507,6 +2502,8 @@ class TraveauxViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(traveaux)
             return Response(serializer.data)
 
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Traveaux.DoesNotExist:
             return Response({'error': 'Traveaux not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -3390,43 +3387,41 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def update_progress(self, request, pk=None):
         """
-        Update the progress of a traveaux
+        Update task progress via progress_percentage (0-100, 10% steps) or quantity_completed.
         """
-        traveaux = self.get_object()
-        raw_quantity = request.data.get('quantity_completed')
-
-        if raw_quantity is None:
-            return Response({'error': 'quantity_completed is required'}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            quantity_completed = int(raw_quantity)
-        except (TypeError, ValueError):
-            return Response({'error': 'quantity_completed must be a number'}, status=status.HTTP_400_BAD_REQUEST)
+            from .progress_utils import apply_progress_update
 
-        if quantity_completed < 0 or quantity_completed > traveaux.quantity:
-            return Response({
-                'error': f'quantity_completed must be between 0 and {traveaux.quantity}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            traveaux = self.get_object()
+            progress_percentage = request.data.get('progress_percentage')
+            if progress_percentage is None:
+                progress_percentage = request.data.get('progress_percent')
+            quantity_completed = request.data.get('quantity_completed')
 
-        traveaux.quantity_completed = quantity_completed
-        traveaux.update_status()
-        traveaux.refresh_from_db()
-
-        try:
-            from .notifications import notify_task_progress_updated
-            notify_task_progress_updated(
+            apply_progress_update(
                 traveaux,
-                traveaux.project,
-                traveaux.progress_percentage,
+                progress_percentage=progress_percentage,
+                quantity_completed=quantity_completed if progress_percentage is None else None,
             )
-        except Exception as notify_error:
-            import logging
-            logging.getLogger(__name__).error(
-                'Error sending progress notification: %s', notify_error
-            )
+            traveaux.refresh_from_db()
 
-        serializer = self.get_serializer(traveaux)
-        return Response(serializer.data)
+            try:
+                from .notifications import notify_task_progress_updated
+                notify_task_progress_updated(
+                    traveaux,
+                    traveaux.project,
+                    traveaux.progress_percentage,
+                )
+            except Exception as notify_error:
+                import logging
+                logging.getLogger(__name__).error(
+                    'Error sending progress notification: %s', notify_error
+                )
+
+            serializer = self.get_serializer(traveaux)
+            return Response(serializer.data)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(
         detail=True,
