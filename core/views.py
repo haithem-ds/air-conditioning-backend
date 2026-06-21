@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -40,6 +40,24 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _client_for_user(user):
+    """Resolve the Client record linked to a CLIENT-role user."""
+    if user.role != 'CLIENT':
+        return None
+    try:
+        return Client.objects.get(user=user)
+    except Client.DoesNotExist:
+        pass
+    username = getattr(user, 'username', '') or ''
+    if username.startswith('client_'):
+        try:
+            return Client.objects.get(pk=int(username.replace('client_', '')))
+        except (ValueError, Client.DoesNotExist):
+            return None
+    return None
+
 
 def _draw_fca_logo_header(pdf_canvas, width, height):
     """
@@ -406,18 +424,12 @@ class SiteViewSet(viewsets.ModelViewSet):
         if user.role == 'ADMIN':
             return queryset
         elif user.role == 'CLIENT':
-            # Extract client ID from username (format: client_<id>) if not provided in query params
-            if not client_id and user.username.startswith('client_'):
-                try:
-                    client_id = int(user.username.replace('client_', ''))
-                    queryset = queryset.filter(client_id=client_id)
-                except ValueError:
-                    return Site.objects.none()
-            elif not client_id:
-                # If no client_id found, return no sites for security
+            client = _client_for_user(user)
+            if client is None:
                 return Site.objects.none()
-            # If client_id was provided in query params, it's already filtered above
-            return queryset
+            if client_id and client_id != client.id:
+                return Site.objects.none()
+            return queryset.filter(client=client)
         elif user.role == 'TECHNICIAN':
             # Technicians should only see sites linked to projects assigned to their groups.
             return queryset.filter(
@@ -431,18 +443,38 @@ class SiteViewSet(viewsets.ModelViewSet):
         else:
             return Site.objects.none()
     
+    def create(self, request, *args, **kwargs):
+        if request.user.role == 'TECHNICIAN':
+            return Response({'error': 'Technicians cannot create sites'}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        """
-        Ensure only clients can create sites for their own company
-        """
         user = self.request.user
         if user.role == 'CLIENT':
-            # Since Client model no longer has direct user relationship,
-            # we'll need to get the client from the request data or handle differently
-            # For now, let the serializer handle it based on the client field in request
+            client = _client_for_user(user)
+            if client is None:
+                raise PermissionDenied('Client profile not found')
+            serializer.save(client=client)
+        elif user.role == 'ADMIN':
             serializer.save()
         else:
-            serializer.save()
+            raise PermissionDenied('Only admins and clients can create sites')
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if user.role == 'CLIENT':
+            client = _client_for_user(user)
+            if client is None or serializer.instance.client_id != client.id:
+                raise PermissionDenied('Cannot update this site')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.role == 'CLIENT':
+            client = _client_for_user(user)
+            if client is None or instance.client_id != client.id:
+                raise PermissionDenied('Cannot delete this site')
+        instance.delete()
 
 
 class TechnicianViewSet(viewsets.ModelViewSet):
@@ -2459,6 +2491,19 @@ class TraveauxViewSet(viewsets.ModelViewSet):
             traveaux.update_status()
             traveaux.refresh_from_db()
 
+            try:
+                from .notifications import notify_task_progress_updated
+                notify_task_progress_updated(
+                    traveaux,
+                    traveaux.project,
+                    traveaux.progress_percentage,
+                )
+            except Exception as notify_error:
+                import logging
+                logging.getLogger(__name__).error(
+                    'Error sending progress notification: %s', notify_error
+                )
+
             serializer = self.get_serializer(traveaux)
             return Response(serializer.data)
 
@@ -3366,6 +3411,19 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
         traveaux.quantity_completed = quantity_completed
         traveaux.update_status()
         traveaux.refresh_from_db()
+
+        try:
+            from .notifications import notify_task_progress_updated
+            notify_task_progress_updated(
+                traveaux,
+                traveaux.project,
+                traveaux.progress_percentage,
+            )
+        except Exception as notify_error:
+            import logging
+            logging.getLogger(__name__).error(
+                'Error sending progress notification: %s', notify_error
+            )
 
         serializer = self.get_serializer(traveaux)
         return Response(serializer.data)

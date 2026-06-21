@@ -29,10 +29,15 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_client_name(self, obj):
         """Get client name if user is a client"""
+        if obj.role != 'CLIENT':
+            return None
+        try:
+            return obj.client_profile.name
+        except (Client.DoesNotExist, AttributeError):
+            pass
         if obj.username.startswith('client_'):
             try:
                 client_id = int(obj.username.replace('client_', ''))
-                from .models import Client
                 client = Client.objects.get(pk=client_id)
                 return client.name
             except (Client.DoesNotExist, ValueError):
@@ -41,10 +46,15 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_client_id(self, obj):
         """Get client ID if user is a client"""
+        if obj.role != 'CLIENT':
+            return None
+        try:
+            return obj.client_profile.id
+        except (Client.DoesNotExist, AttributeError):
+            pass
         if obj.username.startswith('client_'):
             try:
-                client_id = int(obj.username.replace('client_', ''))
-                return client_id
+                return int(obj.username.replace('client_', ''))
             except ValueError:
                 return None
         return None

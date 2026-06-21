@@ -285,3 +285,41 @@ def notify_technicians_new_task(
     
     send_push_notification(tokens, title, body, data)
 
+
+def notify_task_progress_updated(
+    task: Traveaux | MaintenanceTraveaux,
+    project: ProjectInstallation | ProjectMaintenance,
+    progress_percent: float,
+):
+    """
+    Notify technicians when task progress changes so mobile/web can refresh in near real-time.
+    """
+    if not project.technician_group:
+        return
+
+    tokens = get_technician_group_tokens(project.technician_group)
+    if not tokens:
+        return
+
+    project_type = "installation" if isinstance(project, ProjectInstallation) else "maintenance"
+    task_kind = "traveaux" if isinstance(task, Traveaux) else "maintenance_traveaux"
+
+    title = f"Progress updated: {task.title}"
+    body = f"{progress_percent:.0f}% complete on {project.project_code}"
+
+    data = {
+        "type": "progress_updated",
+        "task_id": task.id,
+        "task_title": task.title,
+        "project_id": project.id,
+        "project_code": project.project_code,
+        "project_name": project.project_name,
+        "project_type": project_type,
+        "task_type": task_kind,
+        "progress_percent": str(round(progress_percent, 2)),
+        "quantity_completed": str(task.quantity_completed),
+        "quantity": str(task.quantity),
+    }
+
+    send_push_notification(tokens, title, body, data)
+
