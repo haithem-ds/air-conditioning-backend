@@ -455,8 +455,17 @@ class SiteViewSet(viewsets.ModelViewSet):
             if client is None:
                 raise PermissionDenied('Client profile not found')
             serializer.save(client=client)
-        elif user.role == 'ADMIN':
-            serializer.save()
+        elif user.role == 'ADMIN' or getattr(user, 'is_staff', False):
+            client_id = self.request.data.get('client')
+            if client_id in (None, ''):
+                raise ValidationError({'client': 'Client is required.'})
+            try:
+                client_pk = int(client_id)
+            except (TypeError, ValueError):
+                raise ValidationError({'client': 'Invalid client id.'})
+            if not Client.objects.filter(pk=client_pk).exists():
+                raise ValidationError({'client': 'Client not found.'})
+            serializer.save(client_id=client_pk)
         else:
             raise PermissionDenied('Only admins and clients can create sites')
 
