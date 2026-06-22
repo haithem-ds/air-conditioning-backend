@@ -42,23 +42,17 @@ from .serializers import (
 User = get_user_model()
 
 
-def _client_for_user(user):
-    """Resolve the Client record linked to a CLIENT-role user."""
-    if user.role != 'CLIENT':
-        return None
-    try:
-        return Client.objects.get(user=user)
-    except Client.DoesNotExist:
-        pass
-    username = getattr(user, 'username', '') or ''
-    if username.startswith('client_'):
-        try:
-            return Client.objects.get(pk=int(username.replace('client_', '')))
-        except (ValueError, Client.DoesNotExist):
-            return None
-    return None
+from .tenant_utils import (
+    client_for_user,
+    get_user_organization,
+    scope_by_tenant,
+    scope_users_by_tenant,
+    require_organization,
+    assert_client_in_organization,
+)
 
-
+# Backward-compatible alias used throughout views.py
+_client_for_user = client_for_user
 def _draw_fca_logo_header(pdf_canvas, width, height):
     """
     Draw FCA logo image on both header corners.
@@ -282,11 +276,11 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.role == 'ADMIN':
-            return User.objects.all()
+            return scope_users_by_tenant(User.objects.all(), user)
         elif user.role == 'CLIENT':
-            return User.objects.filter(role__in=['CLIENT', 'TECHNICIAN'])
+            return scope_users_by_tenant(User.objects.filter(role__in=['CLIENT', 'TECHNICIAN']), user)
         elif user.role == 'TECHNICIAN':
-            return User.objects.filter(role__in=['TECHNICIAN'])
+            return scope_users_by_tenant(User.objects.filter(role__in=['TECHNICIAN']), user)
         else:
             return User.objects.none()
     
@@ -370,16 +364,21 @@ class ClientViewSet(viewsets.ModelViewSet):
             )
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user)
         elif user.role == 'CLIENT':
-            # For now, return all clients since we removed user relationship
-            # In the future, you might want to add a different filtering mechanism
-            return queryset
+            # Clients only see their own client record within their organization
+            client = _client_for_user(user)
+            if client is None:
+                return Client.objects.none()
+            return queryset.filter(pk=client.pk)
         elif user.role == 'TECHNICIAN':
-            # Technicians can view all clients (for service assignments and site information)
-            return queryset
+            return scope_by_tenant(queryset, user)
         else:
             return Client.objects.none()
+    
+    def perform_create(self, serializer):
+        org = require_organization(self.request.user)
+        serializer.save(organization=org)
     
     @action(detail=True, methods=['get'])
     def sites(self, request, pk=None):
@@ -422,7 +421,7 @@ class SiteViewSet(viewsets.ModelViewSet):
                 pass  # Invalid client_id, will be handled below
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'client__organization')
         elif user.role == 'CLIENT':
             client = _client_for_user(user)
             if client is None:
@@ -460,12 +459,11 @@ class SiteViewSet(viewsets.ModelViewSet):
             if client_id in (None, ''):
                 raise ValidationError({'client': 'Client is required.'})
             try:
-                client_pk = int(client_id)
-            except (TypeError, ValueError):
-                raise ValidationError({'client': 'Invalid client id.'})
-            if not Client.objects.filter(pk=client_pk).exists():
-                raise ValidationError({'client': 'Client not found.'})
-            serializer.save(client_id=client_pk)
+                client = Client.objects.get(pk=int(client_id))
+            except (Client.DoesNotExist, ValueError, TypeError):
+                raise PermissionDenied('Invalid client for this organization')
+            assert_client_in_organization(client, user)
+            serializer.save(client=client)
         else:
             raise PermissionDenied('Only admins and clients can create sites')
 
@@ -501,13 +499,15 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.role in ['ADMIN', 'CLIENT']:
-            return Technician.objects.all()
+            return scope_by_tenant(Technician.objects.all(), user)
         elif user.role == 'TECHNICIAN':
-            # For now, return all technicians since we removed user relationship
-            # In the future, you might want to add a different filtering mechanism
-            return Technician.objects.all()
+            return scope_by_tenant(Technician.objects.all(), user)
         else:
             return Technician.objects.none()
+    
+    def perform_create(self, serializer):
+        org = require_organization(self.request.user)
+        serializer.save(organization=org)
     
     @action(detail=False, methods=['get'])
     def available(self, request):
@@ -549,12 +549,18 @@ class TeamGroupViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.role in ['ADMIN', 'CLIENT']:
-            return TeamGroup.objects.all()
+            return scope_by_tenant(TeamGroup.objects.all(), user)
         elif user.role == 'TECHNICIAN':
-            # Technicians can see teams they belong to
-            return TeamGroup.objects.filter(technicians__user=user)
+            return scope_by_tenant(
+                TeamGroup.objects.filter(technicians__user=user),
+                user,
+            )
         else:
             return TeamGroup.objects.none()
+    
+    def perform_create(self, serializer):
+        org = require_organization(self.request.user)
+        serializer.save(organization=org)
     
     @action(detail=True, methods=['post'])
     def add_technician(self, request, pk=None):
@@ -628,7 +634,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     'username': user.username,
                     'email': user.email,
                     'role': user.role,
-                    'full_name': user.get_full_name()
+                    'full_name': user.get_full_name(),
+                    'organization_id': user.organization_id,
+                    'organization_name': user.organization.name if user.organization_id else None,
+                    'organization_slug': user.organization.slug if user.organization_id else None,
                 }
             except Exception:
                 # Keep token response valid even if user metadata cannot be attached.
@@ -650,13 +659,12 @@ class EquipmentViewSet(viewsets.ModelViewSet):
         Filter equipment based on user role
         """
         user = self.request.user
-        
-        if user.role == 'ADMIN':
-            return Equipment.objects.all()
-        else:
-            # For now, return all equipment for non-admin users
-            # In the future, you might want to add different filtering logic
-            return Equipment.objects.all()
+        queryset = Equipment.objects.all()
+        return scope_by_tenant(queryset, user)
+    
+    def perform_create(self, serializer):
+        org = require_organization(self.request.user)
+        serializer.save(organization=org)
     
     @action(detail=False, methods=['get'])
     def by_type(self, request):
@@ -711,7 +719,7 @@ class ClientEquipmentViewSet(viewsets.ModelViewSet):
                 return ClientEquipment.objects.none()
         
         if user.role == 'ADMIN':
-            return queryset.all()
+            return scope_by_tenant(queryset, user, 'client__organization')
         elif user.role == 'CLIENT':
             # Extract client ID from username (format: client_<id>)
             if user.username.startswith('client_'):
@@ -724,8 +732,7 @@ class ClientEquipmentViewSet(viewsets.ModelViewSet):
             # Fallback: try to filter by client__user if user relationship exists
             return queryset.filter(client__user=user)
         elif user.role == 'TECHNICIAN':
-            # Technicians can see all client equipment (for maintenance purposes)
-            return queryset.all()
+            return scope_by_tenant(queryset, user, 'client__organization')
         else:
             return ClientEquipment.objects.none()
     
@@ -906,12 +913,18 @@ class TechnicianGroupViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.role == 'ADMIN':
-            return TechnicianGroup.objects.all()
+            return scope_by_tenant(TechnicianGroup.objects.all(), user)
         elif user.role == 'TECHNICIAN':
-            # Technicians can view groups they belong to
-            return TechnicianGroup.objects.filter(technicians__user=user)
+            return scope_by_tenant(
+                TechnicianGroup.objects.filter(technicians__user=user),
+                user,
+            )
         else:
             return TechnicianGroup.objects.none()
+    
+    def perform_create(self, serializer):
+        org = require_organization(self.request.user)
+        serializer.save(organization=org)
     
     @action(detail=True, methods=['post'])
     def add_technician(self, request, pk=None):
@@ -998,7 +1011,7 @@ class ContractViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(contract_type=contract_type)
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'client__organization')
         elif user.role == 'CLIENT':
             # Clients can only see their own contracts
             # Primary: use explicit relation between Client and User
@@ -1016,8 +1029,7 @@ class ContractViewSet(viewsets.ModelViewSet):
                         return Contract.objects.none()
                 return Contract.objects.none()
         elif user.role == 'TECHNICIAN':
-            # Technicians can see all contracts (for service purposes)
-            return queryset
+            return scope_by_tenant(queryset, user, 'client__organization')
         else:
             return Contract.objects.none()
     
@@ -1349,7 +1361,7 @@ class ProjectInstallationViewSet(viewsets.ModelViewSet):
         queryset = ProjectInstallation.objects.select_related('client', 'contract', 'technician_group').prefetch_related('equipment', 'pdf_documents', 'facture_pdfs', 'pv_pdfs', 'quote_pdfs')
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'client__organization')
         elif user.role == 'CLIENT':
             # Extract client ID from username (format: client_<id>)
             if user.username.startswith('client_'):
@@ -1372,9 +1384,13 @@ class ProjectInstallationViewSet(viewsets.ModelViewSet):
                 
                 if technician_groups.exists():
                     technician_group_ids = list(technician_groups.values_list('id', flat=True))
-                    return queryset.filter(
-                        technician_group__in=technician_group_ids,
-                        is_active=True
+                    return scope_by_tenant(
+                        queryset.filter(
+                            technician_group__in=technician_group_ids,
+                            is_active=True,
+                        ),
+                        user,
+                        'client__organization',
                     )
                 else:
                     return ProjectInstallation.objects.none()
@@ -2049,7 +2065,7 @@ class TraveauxViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(project_id=project_id)
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'project__client__organization')
         elif user.role == 'CLIENT':
             # Match ContractViewSet: prefer Client.user FK, else client_<id> username (email login)
             try:
@@ -2065,10 +2081,13 @@ class TraveauxViewSet(viewsets.ModelViewSet):
                         return Traveaux.objects.none()
                 return Traveaux.objects.none()
         elif user.role == 'TECHNICIAN':
-            # Technicians should only see traveaux tied to projects assigned to their groups.
-            return queryset.filter(
-                project__technician_group__technicians__user=user
-            ).distinct()
+            return scope_by_tenant(
+                queryset.filter(
+                    project__technician_group__technicians__user=user
+                ).distinct(),
+                user,
+                'project__client__organization',
+            )
         else:
             return Traveaux.objects.none()
     
@@ -2611,7 +2630,7 @@ class ProjectMaintenanceViewSet(viewsets.ModelViewSet):
         queryset = ProjectMaintenance.objects.select_related('client', 'contract', 'technician_group').prefetch_related('equipment', 'pdf_documents', 'facture_pdfs', 'pv_pdfs', 'quote_pdfs')
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'client__organization')
         elif user.role == 'CLIENT':
             # Extract client ID from username (format: client_<id>)
             if user.username.startswith('client_'):
@@ -2634,9 +2653,13 @@ class ProjectMaintenanceViewSet(viewsets.ModelViewSet):
                 
                 if technician_groups.exists():
                     technician_group_ids = list(technician_groups.values_list('id', flat=True))
-                    return queryset.filter(
-                        technician_group__in=technician_group_ids,
-                        is_active=True
+                    return scope_by_tenant(
+                        queryset.filter(
+                            technician_group__in=technician_group_ids,
+                            is_active=True,
+                        ),
+                        user,
+                        'client__organization',
                     )
                 else:
                     return ProjectMaintenance.objects.none()
@@ -3262,7 +3285,7 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
                 pass
         
         if user.role == 'ADMIN':
-            result = queryset
+            result = scope_by_tenant(queryset, user, 'project__client__organization')
             print(f"DEBUG MaintenanceTraveaux: ADMIN user, returning {result.count()} traveaux")
             return result
         elif user.role == 'CLIENT':
@@ -3285,7 +3308,11 @@ class MaintenanceTraveauxViewSet(viewsets.ModelViewSet):
                         return MaintenanceTraveaux.objects.none()
                 return MaintenanceTraveaux.objects.none()
         elif user.role == 'TECHNICIAN':
-            result = queryset.filter(project__technician_group__technicians__user=user)
+            result = scope_by_tenant(
+                queryset.filter(project__technician_group__technicians__user=user),
+                user,
+                'project__client__organization',
+            )
             print(f"DEBUG MaintenanceTraveaux: TECHNICIAN user, returning {result.count()} traveaux")
             return result
         else:
@@ -3762,7 +3789,7 @@ class DeviceTokenViewSet(viewsets.ModelViewSet):
         queryset = DeviceToken.objects.select_related('technician')
         
         if user.role == 'ADMIN':
-            return queryset
+            return scope_by_tenant(queryset, user, 'technician__organization')
         elif user.role == 'TECHNICIAN':
             # Technicians can only see their own tokens
             try:

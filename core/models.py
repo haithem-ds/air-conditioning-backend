@@ -5,6 +5,25 @@ from django.db import models
 from .document_uploads import DOCUMENT_UPLOAD_EXTENSIONS
 
 
+class Organization(models.Model):
+    """
+    Tenant organization — each HVAC company gets isolated data.
+    """
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=100, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = 'Organization'
+        verbose_name_plural = 'Organizations'
+        ordering = ['name']
+
+
 class User(AbstractUser):
     """
     Custom User model with role-based access control
@@ -20,6 +39,14 @@ class User(AbstractUser):
         choices=ROLE_CHOICES,
         default='CLIENT',
         help_text="User role in the system"
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name='users',
+        null=True,
+        blank=True,
+        help_text="Organization this admin/staff user belongs to"
     )
     phone_number = models.CharField(
         max_length=15,
@@ -54,10 +81,17 @@ class Client(models.Model):
         max_length=255,
         help_text="Name of the company"
     )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='clients',
+        null=True,
+        blank=True,
+        help_text="Organization that owns this client record"
+    )
     code_client = models.CharField(
         max_length=50,
-        unique=True,
-        help_text="Unique client code"
+        help_text="Unique client code within the organization"
     )
     telephone1 = models.CharField(
         max_length=20,
@@ -117,7 +151,6 @@ class Client(models.Model):
         help_text="Date when the client account was created"
     )
     email = models.EmailField(
-        unique=True,
         blank=True,
         null=True,
         help_text="Client's email address for login"
@@ -178,6 +211,12 @@ class Client(models.Model):
         verbose_name = "Client"
         verbose_name_plural = "Clients"
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'code_client'],
+                name='uniq_client_code_per_org',
+            ),
+        ]
 
 
 class Site(models.Model):
@@ -276,6 +315,15 @@ class Technician(models.Model):
         ('ON_BREAK', 'On Break'),
         ('NOT_WORKING', 'Not Working'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='technicians',
+        null=True,
+        blank=True,
+        help_text="Organization this technician belongs to"
+    )
     
     first_name = models.CharField(
         max_length=150,
@@ -287,7 +335,6 @@ class Technician(models.Model):
     )
     identification_number = models.CharField(
         max_length=50,
-        unique=True,
         blank=True,
         null=True,
         help_text="National or company ID"
@@ -445,6 +492,15 @@ class TechnicianGroup(models.Model):
         ('GENERAL', 'General Service'),
         ('EMERGENCY', 'Emergency Response'),
     ]
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='technician_groups',
+        null=True,
+        blank=True,
+        help_text="Organization that owns this technician group"
+    )
     
     name = models.CharField(
         max_length=255,
@@ -522,14 +578,21 @@ class Equipment(models.Model):
     """
     Equipment catalog model - defines types of equipment that can be owned by clients
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='equipment_catalog',
+        null=True,
+        blank=True,
+        help_text="Organization that owns this equipment catalog entry"
+    )
     full_name = models.CharField(
         max_length=255,
         help_text="Full descriptive name (e.g., 'Split AC Samsung 18000 BTU')"
     )
     code = models.CharField(
         max_length=100,
-        unique=True,
-        help_text="Unique equipment type code"
+        help_text="Equipment type code unique within the organization"
     )
     brand = models.CharField(
         max_length=100,
@@ -571,6 +634,12 @@ class Equipment(models.Model):
         verbose_name = "Equipment Type"
         verbose_name_plural = "Equipment Types"
         ordering = ['brand', 'full_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'code'],
+                name='uniq_equipment_code_per_org',
+            ),
+        ]
 
 
 class ClientEquipment(models.Model):
@@ -591,8 +660,7 @@ class ClientEquipment(models.Model):
     )
     serial_number = models.CharField(
         max_length=255,
-        unique=True,
-        help_text="Unique serial number (important for maintenance tracking)"
+        help_text="Serial number (unique per client equipment record)"
     )
     year_of_facturation = models.PositiveIntegerField(
         help_text="Year the equipment was purchased/invoiced"
@@ -662,8 +730,7 @@ class Contract(models.Model):
     
     code = models.CharField(
         max_length=50,
-        unique=True,
-        help_text="Unique contract code number"
+        help_text="Contract code"
     )
     client = models.ForeignKey(
         Client,
@@ -784,6 +851,14 @@ class TeamGroup(models.Model):
     """
     Team Group model for organizing technicians into teams
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='team_groups',
+        null=True,
+        blank=True,
+        help_text="Organization that owns this team group"
+    )
     name = models.CharField(
         max_length=255,
         help_text="Name of the team group"
@@ -834,8 +909,7 @@ class ProjectInstallation(models.Model):
     
     project_code = models.CharField(
         max_length=50,
-        unique=True,
-        help_text="Unique project code"
+        help_text="Project code unique within the organization"
     )
     project_name = models.CharField(
         max_length=255,
@@ -1048,8 +1122,7 @@ class ProjectMaintenance(models.Model):
     
     project_code = models.CharField(
         max_length=50,
-        unique=True,
-        help_text="Unique project code"
+        help_text="Project code unique within the organization"
     )
     project_name = models.CharField(
         max_length=255,

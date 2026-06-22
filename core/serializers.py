@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
-from .models import Client, Site, Technician, TeamGroup, Equipment, ClientEquipment, TechnicianGroup, Contract, ProjectInstallation, ProjectInstallationPDF, ProjectInstallationFacture, ProjectInstallationPV, ProjectInstallationQuote, Traveaux, TraveauxReport, ProjectMaintenance, ProjectMaintenancePDF, ProjectMaintenanceFacture, ProjectMaintenancePV, ProjectMaintenanceQuote, MaintenanceTraveaux, MaintenanceTraveauxReport, DeviceToken
+from .models import Client, Site, Technician, TeamGroup, Equipment, ClientEquipment, TechnicianGroup, Contract, ProjectInstallation, ProjectInstallationPDF, ProjectInstallationFacture, ProjectInstallationPV, ProjectInstallationQuote, Traveaux, TraveauxReport, ProjectMaintenance, ProjectMaintenancePDF, ProjectMaintenanceFacture, ProjectMaintenancePV, ProjectMaintenanceQuote, MaintenanceTraveaux, MaintenanceTraveauxReport, DeviceToken, Organization
 
 User = get_user_model()
 
@@ -17,15 +17,72 @@ class UserSerializer(serializers.ModelSerializer):
     identification_number = serializers.SerializerMethodField()
     speciality = serializers.SerializerMethodField()
     date_of_enrollment = serializers.SerializerMethodField()
+    organization_id = serializers.SerializerMethodField()
+    organization_name = serializers.SerializerMethodField()
+    organization_slug = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active', 
             'date_joined', 'client_name', 'client_id', 'technician_id', 'phone_number',
-            'identification_number', 'speciality', 'date_of_enrollment'
+            'identification_number', 'speciality', 'date_of_enrollment',
+            'organization_id', 'organization_name', 'organization_slug',
         ]
         read_only_fields = ['id', 'date_joined']
+    
+    def get_organization_id(self, obj):
+        if obj.organization_id:
+            return obj.organization_id
+        if obj.role == 'CLIENT':
+            client = self._client_for_user(obj)
+            return client.organization_id if client else None
+        if obj.role == 'TECHNICIAN':
+            try:
+                return obj.technician_profile.organization_id
+            except Exception:
+                return None
+        return None
+
+    def get_organization_name(self, obj):
+        org = getattr(obj, 'organization', None)
+        if org:
+            return org.name
+        if obj.role == 'CLIENT':
+            client = self._client_for_user(obj)
+            return client.organization.name if client and client.organization_id else None
+        if obj.role == 'TECHNICIAN':
+            try:
+                return obj.technician_profile.organization.name
+            except Exception:
+                return None
+        return None
+
+    def get_organization_slug(self, obj):
+        org = getattr(obj, 'organization', None)
+        if org:
+            return org.slug
+        if obj.role == 'CLIENT':
+            client = self._client_for_user(obj)
+            return client.organization.slug if client and client.organization_id else None
+        if obj.role == 'TECHNICIAN':
+            try:
+                return obj.technician_profile.organization.slug
+            except Exception:
+                return None
+        return None
+
+    def _client_for_user(self, obj):
+        try:
+            return obj.client_profile
+        except Exception:
+            pass
+        if obj.username.startswith('client_'):
+            try:
+                return Client.objects.get(pk=int(obj.username.replace('client_', '')))
+            except (Client.DoesNotExist, ValueError):
+                return None
+        return None
     
     def get_client_name(self, obj):
         """Get client name if user is a client"""
@@ -117,7 +174,14 @@ class UserCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = User.objects.create_user(**validated_data)
+        request = self.context.get('request')
+        extra = {}
+        if request and request.user.is_authenticated:
+            from .tenant_utils import get_user_organization
+            org = get_user_organization(request.user)
+            if org is not None:
+                extra['organization'] = org
+        user = User.objects.create_user(**validated_data, **extra)
         user.set_password(password)
         user.save()
         return user
